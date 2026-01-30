@@ -141,7 +141,8 @@
   </div>
   <canvas id="historyChart"></canvas>
   <details class="weak-list"><summary>🎯 Слаби точки</summary><div id="weakPointsList"></div></details>
-  <button id="clearHistoryBtn" style="margin-top:12px;width:100%;background:var(--danger);color:#fff;">🗑️ Изтрий историята</button>
+  <button id="clearStatsBtn" style="margin-top:12px;width:100%;background:var(--danger);color:#fff;">🗑️ Изтрий статистики</button>
+  <button id="resetAllBtn" style="margin-top:8px;width:100%;background:#dc3545;color:#fff;">🔄 Нулирай всичко</button>
 </div>
 
 <div id="setupPanel">
@@ -222,9 +223,10 @@ let baseStack=null,baseState=null;
 let examStartTime=null,timerInterval=null,questionStartTime=null;
 const EXAM_TIME_SECONDS=105*60;
 let currentRoundType="base",currentMode=null,selectedExamIndex=null;
-let completedExams=new Set();
+let completedExams=new Set(JSON.parse(localStorage.getItem('agentforce_completed')||'[]'));
 let history=JSON.parse(localStorage.getItem('agentforce_history')||'[]');
 let wrongCounts=JSON.parse(localStorage.getItem('agentforce_wrong')||'{}');
+let savedExams=JSON.parse(localStorage.getItem('agentforce_exams')||'null');
 
 if(localStorage.getItem('darkMode')==='true'){document.body.classList.add('dark');darkModeBtn.textContent='☀️';}
 darkModeBtn.onclick=()=>{document.body.classList.toggle('dark');const d=document.body.classList.contains('dark');darkModeBtn.textContent=d?'☀️':'🌙';localStorage.setItem('darkMode',d);};
@@ -244,7 +246,8 @@ function ensureOrderForQid(qid){if(!answerOrder[qid])answerOrder[qid]=shuffle(Ob
 
 statsBtn.onclick=()=>{renderStatsPanel();statsPanel.classList.remove('hidden');};
 $("closeStatsBtn").onclick=()=>statsPanel.classList.add('hidden');
-$("clearHistoryBtn").onclick=()=>{if(!confirm('Изтрий цялата история?'))return;history=[];wrongCounts={};localStorage.removeItem('agentforce_history');localStorage.removeItem('agentforce_wrong');renderStatsPanel();};
+$("clearStatsBtn").onclick=()=>{if(!confirm('Изтрий история и слаби точки?'))return;history=[];wrongCounts={};localStorage.removeItem('agentforce_history');localStorage.removeItem('agentforce_wrong');renderStatsPanel();};
+$("resetAllBtn").onclick=()=>{if(!confirm('⚠️ Това ще изтрие ВСИЧКО и ще разбърка въпросите наново. Сигурен ли си?'))return;history=[];wrongCounts={};completedExams.clear();EXAMS=[];savedExams=null;localStorage.removeItem('agentforce_history');localStorage.removeItem('agentforce_wrong');localStorage.removeItem('agentforce_completed');localStorage.removeItem('agentforce_exams');renderStatsPanel();statsPanel.classList.add('hidden');currentMode=null;selectedExamIndex=null;learningModeBtn.classList.remove("selected");examModeBtn.classList.remove("selected");$("step2num").classList.remove("done");$("step2num").classList.add("active");$("step3num").classList.remove("done","active");examButtonsEl.innerHTML="";examPlaceholder.classList.remove("hidden");reshuffleBtn.classList.add("hidden");startBtn.disabled=true;modeDescEl.textContent="Избери как искаш да се упражняваш.";};
 
 function renderStatsPanel(){
   const t=history.length,avgS=t?Math.round(history.reduce((a,h)=>a+h.pct,0)/t):0,avgT=t?Math.round(history.reduce((a,h)=>a+h.avgTime,0)/t):0,passed=history.filter(h=>h.pct>=72).length,passR=t?Math.round(passed/t*100):0;
@@ -270,15 +273,29 @@ function selectMode(m){
   currentMode=m;learningModeBtn.classList.toggle("selected",m==="learning");examModeBtn.classList.toggle("selected",m==="exam");
   modeDescEl.textContent=m==="learning"?"📚 Виждаш верния отговор веднага.":"📝 Резултатите се показват накрая.";
   $("step2num").classList.remove("active");$("step2num").classList.add("done");$("step3num").classList.add("active");
-  generateExams();
+  loadOrGenerateExams();
 }
 learningModeBtn.onclick=()=>selectMode("learning");
 examModeBtn.onclick=()=>selectMode("exam");
 
+function saveCompletedExams(){
+  localStorage.setItem('agentforce_completed',JSON.stringify([...completedExams]));
+}
+
 function generateExams(){
-  const s=shuffle([...ALL_QIDS]);EXAMS=[];completedExams.clear();
+  const s=shuffle([...ALL_QIDS]);EXAMS=[];completedExams.clear();saveCompletedExams();
   const size=Math.ceil(s.length/5);for(let i=0;i<5;i++)EXAMS.push(s.slice(i*size,(i+1)*size));
+  localStorage.setItem('agentforce_exams',JSON.stringify(EXAMS));
   renderExamButtons();
+}
+
+function loadOrGenerateExams(){
+  if(savedExams&&savedExams.length===5){
+    EXAMS=savedExams;
+    renderExamButtons();
+  }else{
+    generateExams();
+  }
 }
 
 function renderExamButtons(){
@@ -345,7 +362,7 @@ $("helpToggle").onclick=()=>helpBoxEl.classList.toggle("hidden");
 
 function computeStats(st,arr){let c=0,w=[],dk=[],ns=[],cns=[],tt=0;arr.forEach(qid=>{const s=st[qid];if(!s||!s.status||s.status==="unanswered")return;if(s.dontKnow)dk.push(qid);if(s.notSure)ns.push(qid);tt+=s.time||0;if(s.status==="correct"){c++;if(s.notSure)cns.push(qid);}else w.push(qid);});return{correct:c,wrong:w,dk,ns,correctButNotSure:cns,totalTime:tt};}
 
-function finishExam(){clearInterval(timerInterval);examUI.classList.add("hidden");if(currentRoundType==="base"){baseState=deepClone(questionState);baseStack=STACK.slice();if(selectedExamIndex!==null)completedExams.add(selectedExamIndex);const st=computeStats(questionState,STACK),t=STACK.length,pct=t?Math.round(st.correct/t*100):0,avgT=t?Math.round(st.totalTime/t):0;history.push({date:new Date().toISOString(),mode:currentMode,total:t,correct:st.correct,pct,avgTime:avgT});localStorage.setItem('agentforce_history',JSON.stringify(history));}renderResultsScreen();}
+function finishExam(){clearInterval(timerInterval);examUI.classList.add("hidden");if(currentRoundType==="base"){baseState=deepClone(questionState);baseStack=STACK.slice();if(selectedExamIndex!==null){completedExams.add(selectedExamIndex);saveCompletedExams();}const st=computeStats(questionState,STACK),t=STACK.length,pct=t?Math.round(st.correct/t*100):0,avgT=t?Math.round(st.totalTime/t):0;history.push({date:new Date().toISOString(),mode:currentMode,total:t,correct:st.correct,pct,avgTime:avgT});localStorage.setItem('agentforce_history',JSON.stringify(history));}renderResultsScreen();}
 
 function renderResultsScreen(){
   resultsPanel.classList.remove("hidden");const t=STACK.length,{correct,wrong,dk,ns,correctButNotSure,totalTime}=computeStats(questionState,STACK),pct=t?Math.round(correct/t*100):0,passed=pct>=72,avgT=t?Math.round(totalTime/t):0;
