@@ -504,6 +504,7 @@ const EXAM_TIME_SECONDS = 105 * 60;
 let currentRoundType = "base";
 let currentMode = null;
 let selectedExamIndex = null;
+let completedExams = new Set(); // Track completed exams
 
 // History (localStorage)
 let history = JSON.parse(localStorage.getItem('agentforce_history') || '[]');
@@ -664,20 +665,38 @@ examModeBtn.addEventListener("click", () => selectMode("exam"));
 function generateExams() {
   const s = shuffle([...ALL_QIDS]);
   EXAMS = [];
+  completedExams.clear();
   const size = Math.ceil(s.length / 5);
   for (let i = 0; i < 5; i++) EXAMS.push(s.slice(i * size, (i + 1) * size));
   
+  renderExamButtons();
+}
+
+function renderExamButtons() {
   examPlaceholder.classList.add("hidden");
   reshuffleBtn.classList.remove("hidden");
   selectedExamIndex = null;
   startBtn.disabled = true;
   
-  examButtonsEl.innerHTML = EXAMS.map((e, i) => 
-    `<button data-exam="${i}">Изпит ${i + 1} (${e.length})</button>`
-  ).join("");
+  const totalCompleted = completedExams.size;
+  const totalQuestions = ALL_QIDS.length;
+  const completedQuestions = [...completedExams].reduce((sum, i) => sum + EXAMS[i].length, 0);
+  
+  let progressText = totalCompleted > 0 
+    ? `<div style="font-size:13px;color:var(--text2);margin-bottom:8px;">✅ Минати: ${totalCompleted}/5 изпита (${completedQuestions}/${totalQuestions} въпроса)</div>` 
+    : '';
+  
+  examButtonsEl.innerHTML = progressText + EXAMS.map((e, i) => {
+    const done = completedExams.has(i);
+    const style = done 
+      ? 'background:var(--success);color:#fff;border-color:var(--success);' 
+      : '';
+    return `<button data-exam="${i}" style="${style}">${done ? '✅ ' : ''}Изпит ${i + 1} (${e.length})</button>`;
+  }).join("");
 }
 
 reshuffleBtn.addEventListener("click", () => {
+  if (completedExams.size > 0 && !confirm("Това ще нулира прогреса по изпитите. Сигурен ли си?")) return;
   generateExams();
   $("step3num").classList.remove("done");
   $("step3num").classList.add("active");
@@ -717,6 +736,14 @@ exitBtn.addEventListener("click", () => {
 function startTimer() {
   clearInterval(timerInterval);
   examStartTime = Date.now();
+  
+  // No timer in learning mode
+  if (currentMode === "learning") {
+    timerEl.classList.add("hidden");
+    return;
+  }
+  
+  timerEl.classList.remove("hidden");
   timerEl.innerText = "Time: 105:00";
   timerInterval = setInterval(() => {
     const elapsed = Math.floor((Date.now() - examStartTime) / 1000);
@@ -916,6 +943,11 @@ function finishExam() {
     baseState = deepClone(questionState);
     baseStack = STACK.slice();
     
+    // Mark exam as completed
+    if (selectedExamIndex !== null) {
+      completedExams.add(selectedExamIndex);
+    }
+    
     // Save to history
     const stats = computeStats(questionState, STACK);
     const t = STACK.length;
@@ -991,18 +1023,29 @@ function renderResultsScreen() {
 function resetToSetup() {
   resultsPanel.classList.add("hidden");
   setupPanel.classList.remove("hidden");
-  currentMode = null;
-  selectedExamIndex = null;
-  learningModeBtn.classList.remove("selected");
-  examModeBtn.classList.remove("selected");
-  $("step2num").classList.remove("done");
-  $("step2num").classList.add("active");
-  $("step3num").classList.remove("done", "active");
-  examButtonsEl.innerHTML = "";
-  examPlaceholder.classList.remove("hidden");
-  reshuffleBtn.classList.add("hidden");
-  startBtn.disabled = true;
-  modeDescEl.textContent = "Избери как искаш да се упражняваш.";
+  
+  // Keep mode and exams, just go back to exam selection
+  if (EXAMS.length > 0 && currentMode) {
+    renderExamButtons();
+    $("step3num").classList.remove("done");
+    $("step3num").classList.add("active");
+    selectedExamIndex = null;
+    startBtn.disabled = true;
+  } else {
+    // Full reset if no exams generated
+    currentMode = null;
+    selectedExamIndex = null;
+    learningModeBtn.classList.remove("selected");
+    examModeBtn.classList.remove("selected");
+    $("step2num").classList.remove("done");
+    $("step2num").classList.add("active");
+    $("step3num").classList.remove("done", "active");
+    examButtonsEl.innerHTML = "";
+    examPlaceholder.classList.remove("hidden");
+    reshuffleBtn.classList.add("hidden");
+    startBtn.disabled = true;
+    modeDescEl.textContent = "Избери как искаш да се упражняваш.";
+  }
 }
 </script>
 </body>
