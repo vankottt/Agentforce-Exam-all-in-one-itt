@@ -1486,7 +1486,7 @@
       $("dontKnow").checked = state?.dontKnow || false;
       $("notSure").checked = state?.notSure || false;
       answerOrder[qid].forEach(([l, t], i) => {
-        $("answers").innerHTML += `<div class="answer" data-letter="${l}"><span>(${i + 1})</span><label><input type="radio" name="answer" value="${l}">${t}</label></div>`;
+        $("answers").innerHTML += `<div class="answer" data-letter="${l}"><label><input type="radio" name="answer" value="${l}">${t}</label></div>`;
       });
       if (state?.selectedAnswer) {
         const r = document.querySelector(`input[name="answer"][value="${state.selectedAnswer}"]`);
