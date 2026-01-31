@@ -321,22 +321,38 @@
     }
 
     #counter {
-      font-weight: 600;
-      font-size: 15px;
-      margin: 0
+      font-weight: 500;
+      font-size: 14px;
+      margin: 0;
+      color: var(--text2);
+      opacity: 0.7;
+    }
+
+    .info-row {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      flex-wrap: wrap;
+      margin-bottom: 4px;
     }
 
     #questionTime {
       font-size: 13px;
-      color: var(--text2)
+      color: var(--text2);
+      display: flex;
+      align-items: center;
+      gap: 4px;
     }
 
     #modeIndicator {
-      font-size: 12px;
-      padding: 4px 8px;
+      font-size: 11px;
+      padding: 2px 6px;
       border-radius: 4px;
       display: inline-block;
-      margin-top: 4px
+      margin: 0;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
     }
 
     #modeIndicator.learning {
@@ -779,7 +795,7 @@
       <div id="progressFill"></div>
     </div>
     <div class="question-header">
-      <div>
+      <div class="info-row">
         <p id="counter"></p><span id="modeIndicator"></span>
         <div id="questionTime"></div>
       </div>
@@ -925,6 +941,7 @@
         }, 1000);
       } else { $("timer").classList.add("hidden"); }
       questionStartTime = Date.now();
+      startQuestionTimer();
       showQuestion();
     }
 
@@ -1391,6 +1408,7 @@
     $("exitBtn").onclick = () => {
       if (!confirm("Сигурен ли си, че искаш да излезеш? Прогресът ще бъде изтрит.")) return;
       clearInterval(timerInterval);
+      clearInterval(questionTimerInterval);
       clearExamSession();
       $("examUI").classList.add("hidden");
       $("setupPanel").classList.remove("hidden");
@@ -1416,6 +1434,18 @@
       }, 1000);
     }
 
+    let questionTimerInterval = null;
+
+    function startQuestionTimer() {
+      clearInterval(questionTimerInterval);
+      if ($("questionTime")) $("questionTime").innerHTML = "⏱️ 0s";
+      questionTimerInterval = setInterval(() => {
+        if (!questionStartTime) return;
+        const diff = Math.floor((Date.now() - questionStartTime) / 1000);
+        if ($("questionTime")) $("questionTime").innerHTML = `⏱️ ${diff}s`;
+      }, 1000);
+    }
+
     function startRound(rt, stack) {
       if (!stack || !stack.length) return;
       currentRoundType = rt;
@@ -1432,6 +1462,7 @@
       $("progressFill").style.width = "0%";
       startTimer();
       questionStartTime = Date.now();
+      startQuestionTimer();
       showQuestion();
     }
 
