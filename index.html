@@ -325,7 +325,10 @@
       font-size: 14px;
       margin: 0;
       color: var(--text2);
-      opacity: 0.7;
+    }
+
+    .faded-text {
+      opacity: 0.5;
     }
 
     .info-row {
@@ -796,8 +799,9 @@
     </div>
     <div class="question-header">
       <div class="info-row">
-        <p id="counter"></p><span id="modeIndicator"></span>
-        <div id="questionTime"></div>
+        <span id="modeIndicator"></span>
+        <p id="counter" class="faded-text"></p>
+        <div id="questionTime" class="faded-text"></div>
       </div>
       <div class="confidence-panel">
         <label><input type="checkbox" id="dontKnow"> ❓ Не знам</label>
