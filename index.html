@@ -12,7 +12,6 @@
   <link rel="apple-touch-icon"
     href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='20' fill='%23007bff'/><text x='50' y='65' text-anchor='middle' font-size='50'>📝</text></svg>">
   <title>Agentforce Exam</title>
-  <!-- Firebase SDK -->
   <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-database-compat.js"></script>
   <style>
@@ -570,22 +569,21 @@
       }
     }
 
-    /* Sync styles */
     .header-buttons {
       display: flex;
       gap: 8px;
-      align-items: center;
+      align-items: center
     }
 
     #syncBtn {
       padding: 8px 12px;
       font-size: 14px;
-      position: relative;
+      position: relative
     }
 
     #syncStatus {
       font-size: 12px;
-      margin-left: 4px;
+      margin-left: 4px
     }
 
     .sync-modal {
@@ -598,11 +596,11 @@
       background: rgba(0, 0, 0, 0.5);
       z-index: 1000;
       align-items: center;
-      justify-content: center;
+      justify-content: center
     }
 
     .sync-modal.show {
-      display: flex;
+      display: flex
     }
 
     .sync-modal-content {
@@ -611,20 +609,20 @@
       border-radius: 12px;
       padding: 20px;
       max-width: 400px;
-      width: 90%;
+      width: 90%
     }
 
     .sync-modal h3 {
       margin: 0 0 16px;
       display: flex;
       justify-content: space-between;
-      align-items: center;
+      align-items: center
     }
 
     .sync-id-box {
       display: flex;
       gap: 8px;
-      margin-bottom: 12px;
+      margin-bottom: 12px
     }
 
     .sync-id-box input {
@@ -635,36 +633,36 @@
       border-radius: 6px;
       background: var(--bg2);
       color: var(--text);
-      font-family: monospace;
+      font-family: monospace
     }
 
     .sync-id-box button {
-      padding: 10px 14px;
+      padding: 10px 14px
     }
 
     .sync-section {
       margin-bottom: 16px;
       padding-bottom: 16px;
-      border-bottom: 1px solid var(--border);
+      border-bottom: 1px solid var(--border)
     }
 
     .sync-section:last-child {
       margin-bottom: 0;
       padding-bottom: 0;
-      border-bottom: none;
+      border-bottom: none
     }
 
     .sync-section label {
       display: block;
       font-weight: 600;
       margin-bottom: 8px;
-      font-size: 14px;
+      font-size: 14px
     }
 
     .sync-info {
       font-size: 13px;
       color: var(--text2);
-      margin-top: 8px;
+      margin-top: 8px
     }
   </style>
 </head>
@@ -677,11 +675,9 @@
     </span>
   </h2>
 
-  <!-- Sync Modal -->
   <div id="syncModal" class="sync-modal">
     <div class="sync-modal-content">
       <h3>☁️ Cloud Sync <button id="closeSyncModal" style="padding:6px 10px;font-size:12px;">✕</button></h3>
-
       <div class="sync-section">
         <label>📋 Твоето Sync ID:</label>
         <div class="sync-id-box">
@@ -690,7 +686,6 @@
         </div>
         <div class="sync-info">Сподели това ID на друго устройство за синхронизация.</div>
       </div>
-
       <div class="sync-section">
         <label>🔗 Свържи се с друго устройство:</label>
         <div class="sync-id-box">
@@ -699,7 +694,6 @@
         </div>
         <div class="sync-info">⚠️ Това ще замени локалните данни с данните от другото устройство.</div>
       </div>
-
       <div class="sync-section">
         <button id="forceSyncBtn" style="width:100%;">🔄 Принудителна синхронизация</button>
         <div class="sync-info" id="lastSyncInfo">Последна синхр.: никога</div>
@@ -807,7 +801,6 @@
   <div id="resultsPanel" class="hidden"></div>
 
   <script>
-    // Register Service Worker for PWA
     if ('serviceWorker' in navigator) { navigator.serviceWorker.register('./service-worker.js').catch(() => { }); }
 
     const $ = id => document.getElementById(id);
@@ -847,7 +840,6 @@
         $("examModeBtn").disabled = false;
         $("modeDesc").textContent = "Избери как искаш да се упражняваш.";
 
-        // Check for saved session and offer to resume
         const savedSession = getExamSession();
         if (savedSession && savedSession.stack && savedSession.stack.length > 0) {
           const answered = Object.values(savedSession.questionState || {}).filter(s => s.status && s.status !== "unanswered").length;
@@ -873,54 +865,49 @@
     function saveCompleted() {
       localStorage.setItem('agentforce_completed_learning', JSON.stringify([...completedLearning]));
       localStorage.setItem('agentforce_completed_exam', JSON.stringify([...completedExam]));
+      scheduleSyncSave();
     }
     function loadCompleted() {
       completedLearning = new Set(JSON.parse(localStorage.getItem('agentforce_completed_learning') || '[]'));
       completedExam = new Set(JSON.parse(localStorage.getItem('agentforce_completed_exam') || '[]'));
     }
-    function saveExams() { localStorage.setItem('agentforce_exams', JSON.stringify(EXAMS)); }
-    function saveHistory() { localStorage.setItem('agentforce_history', JSON.stringify(history)); }
-    function saveWrong() { localStorage.setItem('agentforce_wrong', JSON.stringify(wrongCounts)); }
+    function saveExams() {
+      localStorage.setItem('agentforce_exams', JSON.stringify(EXAMS));
+      scheduleSyncSave();
+    }
+    function saveHistory() {
+      localStorage.setItem('agentforce_history', JSON.stringify(history));
+      scheduleSyncSave();
+    }
+    function saveWrong() {
+      localStorage.setItem('agentforce_wrong', JSON.stringify(wrongCounts));
+      scheduleSyncSave();
+    }
 
-    // Session persistence - save current exam progress
     function saveExamSession() {
       if (!STACK.length) return;
       const session = {
-        stack: STACK,
-        index,
-        questionState,
-        answerOrder,
-        examStartTime,
-        currentMode,
-        selectedExamIndex,
-        currentRoundType,
-        baseStack,
-        baseState
+        stack: STACK, index, questionState, answerOrder, examStartTime,
+        currentMode, selectedExamIndex, currentRoundType, baseStack, baseState
       };
       localStorage.setItem('agentforce_session', JSON.stringify(session));
+      scheduleSyncSave();
     }
-    function clearExamSession() {
-      localStorage.removeItem('agentforce_session');
-    }
+    function clearExamSession() { localStorage.removeItem('agentforce_session'); }
     function getExamSession() {
-      try {
-        return JSON.parse(localStorage.getItem('agentforce_session'));
-      } catch { return null; }
+      try { return JSON.parse(localStorage.getItem('agentforce_session')); }
+      catch { return null; }
     }
     function resumeExamSession(session) {
-      // Restore all state from saved session
-      STACK = session.stack;
-      index = session.index;
+      STACK = session.stack; index = session.index;
       questionState = session.questionState || {};
       answerOrder = session.answerOrder || {};
       examStartTime = session.examStartTime;
       currentMode = session.currentMode;
       selectedExamIndex = session.selectedExamIndex;
       currentRoundType = session.currentRoundType;
-      baseStack = session.baseStack;
-      baseState = session.baseState;
+      baseStack = session.baseStack; baseState = session.baseState;
 
-      // Show exam UI
       $("setupPanel").classList.add("hidden");
       $("statsPanel").classList.add("hidden");
       $("resultsPanel").classList.add("hidden");
@@ -928,7 +915,6 @@
       $("modeIndicator").textContent = currentMode === "learning" ? "📚 Learning" : "📝 Exam";
       $("modeIndicator").className = currentMode;
 
-      // Resume timer for exam mode
       if (currentMode === "exam") {
         $("timer").classList.remove("hidden");
         timerInterval = setInterval(() => {
@@ -937,15 +923,11 @@
           $("timer").innerText = `Time: ${String(Math.floor(rem / 60)).padStart(2, "0")}:${String(rem % 60).padStart(2, "0")}`;
           if (rem === 0) finishExam();
         }, 1000);
-      } else {
-        $("timer").classList.add("hidden");
-      }
-
+      } else { $("timer").classList.add("hidden"); }
       questionStartTime = Date.now();
       showQuestion();
     }
 
-    // ==================== CLOUD SYNC (Firebase) ====================
     // ==================== CLOUD SYNC (Firebase) ====================
     const firebaseConfig = {
       apiKey: "AIzaSyDG0A7yLL9pjMdP07uqEEHODiT2n17CTyQ",
@@ -958,59 +940,7 @@
     };
 
     let db = null;
-    let firebaseInitialized = false;
-
-    // Initialize Firebase
-    function initFirebase() {
-      try {
-        if (typeof firebase === 'undefined') {
-          console.error("Firebase SDK not loaded");
-          setSyncStatus('❌ SDK Error');
-          return;
-        }
-        if (!firebase.apps.length) {
-          firebase.initializeApp(firebaseConfig);
-        }
-        db = firebase.database();
-        firebaseInitialized = true;
-        console.log("Firebase initialized successfully");
-
-        // Connection test
-        const connectedRef = db.ref(".info/connected");
-        connectedRef.on("value", (snap) => {
-          if (snap.val() === true) {
-            console.log("🔥 Firebase connected!");
-            setSyncStatus('✅');
-          } else {
-            console.log("⚠️ Firebase disconnected");
-            setSyncStatus('📡');
-          }
-        });
-
-      } catch (e) {
-        console.error("Firebase init error", e);
-        setSyncStatus('❌ Init Error');
-      }
-    }
-
-    // Attempt init after a short delay to ensure scripts loaded
-    setTimeout(initFirebase, 1000);
-
-    // Global test function
-    window.testFirebaseConnection = async () => {
-      if (!db) { console.error("DB not initialized"); return; }
-      try {
-        console.log("Attempting write...");
-        await db.ref('connection_test').set({ timestamp: Date.now(), status: 'ok' });
-        console.log("Write success!");
-        const snap = await db.ref('connection_test').once('value');
-        console.log("Read success:", snap.val());
-        alert("Firebase Connection OK! ✅");
-      } catch (e) {
-        console.error("Test failed:", e);
-        alert("Firebase Error: " + e.message);
-      }
-    };
+    let firebaseReady = false;
     let syncBlobId = localStorage.getItem('agentforce_sync_id');
     let syncDebounceTimer = null;
     let lastSyncTime = parseInt(localStorage.getItem('agentforce_last_sync') || '0');
@@ -1018,6 +948,58 @@
     function setSyncStatus(status) {
       const el = $("syncStatus");
       if (el) el.textContent = status;
+    }
+
+    function initFirebase() {
+      return new Promise((resolve) => {
+        try {
+          if (typeof firebase === 'undefined') {
+            console.error("Firebase SDK not loaded");
+            setSyncStatus('❌');
+            resolve(false);
+            return;
+          }
+          if (!firebase.apps.length) {
+            firebase.initializeApp(firebaseConfig);
+          }
+          db = firebase.database();
+
+          const connectedRef = db.ref(".info/connected");
+          connectedRef.on("value", (snap) => {
+            if (snap.val() === true) {
+              console.log("🔥 Firebase connected!");
+              firebaseReady = true;
+              setSyncStatus('✅');
+              resolve(true);
+            } else {
+              console.log("⚠️ Firebase disconnected");
+              setSyncStatus('📡');
+            }
+          });
+
+          // Timeout fallback
+          setTimeout(() => {
+            if (!firebaseReady) {
+              console.log("Firebase timeout, proceeding...");
+              firebaseReady = true;
+              resolve(true);
+            }
+          }, 5000);
+
+        } catch (e) {
+          console.error("Firebase init error", e);
+          setSyncStatus('❌');
+          resolve(false);
+        }
+      });
+    }
+
+    function isFirebaseReady() {
+      if (!db || !firebaseReady) {
+        console.warn("Firebase not ready");
+        return false;
+      }
+      return true;
     }
 
     function getAllLocalData() {
@@ -1041,7 +1023,6 @@
       if (cloud.exams && cloud.exams.length) EXAMS = cloud.exams;
       if (cloud.session) localStorage.setItem('agentforce_session', JSON.stringify(cloud.session));
 
-      // Save directly to localStorage (avoid triggering sync hooks)
       localStorage.setItem('agentforce_completed_learning', JSON.stringify([...completedLearning]));
       localStorage.setItem('agentforce_completed_exam', JSON.stringify([...completedExam]));
       localStorage.setItem('agentforce_history', JSON.stringify(history));
@@ -1055,7 +1036,6 @@
 
       const merged = { timestamp: Date.now() };
 
-      // History: concat + dedupe by date
       const allHistory = [...(local.history || []), ...(cloud.history || [])];
       const seen = new Set();
       merged.history = allHistory.filter(h => {
@@ -1064,20 +1044,16 @@
         return true;
       });
 
-      // Completed sets: union
       merged.completedLearning = [...new Set([...(local.completedLearning || []), ...(cloud.completedLearning || [])])];
       merged.completedExam = [...new Set([...(local.completedExam || []), ...(cloud.completedExam || [])])];
 
-      // Wrong counts: max value for each question
       merged.wrongCounts = { ...(local.wrongCounts || {}) };
       Object.entries(cloud.wrongCounts || {}).forEach(([q, count]) => {
         merged.wrongCounts[q] = Math.max(merged.wrongCounts[q] || 0, count);
       });
 
-      // Exams: keep cloud version if exists
       merged.exams = (cloud.exams && cloud.exams.length) ? cloud.exams : (local.exams || []);
 
-      // Session: newer wins
       const localSession = local.session;
       const cloudSession = cloud.session;
       if (localSession && cloudSession) {
@@ -1090,6 +1066,7 @@
     }
 
     async function createBlob() {
+      if (!isFirebaseReady()) return null;
       try {
         setSyncStatus('🔄');
         const data = getAllLocalData();
@@ -1105,6 +1082,7 @@
           $("currentSyncId").value = id;
           setSyncStatus('✅');
           updateLastSyncInfo();
+          console.log("Created sync blob:", id);
         }
         return id;
       } catch (e) {
@@ -1115,22 +1093,29 @@
     }
 
     async function fetchFromCloud() {
+      if (!isFirebaseReady()) return null;
       if (!syncBlobId) return null;
       try {
         setSyncStatus('🔄');
         const snapshot = await db.ref('exams/' + syncBlobId).once('value');
-        if (!snapshot.exists()) throw new Error('Not found');
+        if (!snapshot.exists()) {
+          console.warn('Sync blob not found:', syncBlobId);
+          setSyncStatus('⚠️');
+          return null;
+        }
         const data = snapshot.val();
         setSyncStatus('✅');
+        console.log("Fetched from cloud");
         return data;
       } catch (e) {
-        console.error('Fetch cloud error:', e);
+        console.error('Fetch error:', e);
         setSyncStatus('❌');
         return null;
       }
     }
 
     async function saveToCloud() {
+      if (!isFirebaseReady()) return;
       if (!syncBlobId) {
         await createBlob();
         return;
@@ -1143,18 +1128,21 @@
         localStorage.setItem('agentforce_last_sync', lastSyncTime.toString());
         setSyncStatus('✅');
         updateLastSyncInfo();
+        console.log("Saved to cloud");
       } catch (e) {
-        console.error('Save cloud error:', e);
+        console.error('Save error:', e);
         setSyncStatus('❌');
       }
     }
 
     function scheduleSyncSave() {
+      if (!firebaseReady) return;
       clearTimeout(syncDebounceTimer);
       syncDebounceTimer = setTimeout(() => saveToCloud(), 2000);
     }
 
     async function syncWithCloud() {
+      if (!isFirebaseReady()) return;
       if (!syncBlobId) {
         await createBlob();
         return;
@@ -1224,47 +1212,29 @@
       alert('✅ Синхронизация завършена!');
     };
 
-    // Hook into save functions to trigger cloud sync
-    const originalSaveCompleted = saveCompleted;
-    saveCompleted = function () {
-      originalSaveCompleted();
-      scheduleSyncSave();
-    };
+    // Initialize Firebase and sync
+    async function initializeSync() {
+      console.log("Initializing Firebase...");
+      setSyncStatus('⏳');
+      const success = await initFirebase();
 
-    const originalSaveHistory = saveHistory;
-    saveHistory = function () {
-      originalSaveHistory();
-      scheduleSyncSave();
-    };
-
-    const originalSaveWrong = saveWrong;
-    saveWrong = function () {
-      originalSaveWrong();
-      scheduleSyncSave();
-    };
-
-    const originalSaveExams = saveExams;
-    saveExams = function () {
-      originalSaveExams();
-      scheduleSyncSave();
-    };
-
-    const originalSaveExamSession = saveExamSession;
-    saveExamSession = function () {
-      originalSaveExamSession();
-      scheduleSyncSave();
-    };
-
-    // Initial sync on load
-    (async function initSync() {
-      if (syncBlobId) {
-        $("currentSyncId").value = syncBlobId;
-        await syncWithCloud();
+      if (success) {
+        console.log("Starting initial sync...");
+        if (syncBlobId) {
+          $("currentSyncId").value = syncBlobId;
+          await syncWithCloud();
+        } else {
+          await createBlob();
+        }
+        updateLastSyncInfo();
       } else {
-        await createBlob();
+        console.log("Firebase failed, offline mode");
+        setSyncStatus('📴');
       }
-      updateLastSyncInfo();
-    })();
+    }
+
+    // Start Firebase init after page loads
+    setTimeout(initializeSync, 500);
     // ==================== END CLOUD SYNC ====================
 
     // Stats Panel
@@ -1357,7 +1327,6 @@
       loadOrGenerateExams();
     }
 
-    // Exams
     function loadOrGenerateExams() {
       const saved = JSON.parse(localStorage.getItem('agentforce_exams') || 'null');
       if (saved && Array.isArray(saved) && saved.length === 5 && saved[0] && saved[0].length > 0) {
@@ -1366,7 +1335,7 @@
         const s = shuffle([...ALL_QIDS]);
         EXAMS = [];
         const size = Math.ceil(s.length / 5);
-        for (let i = 0; i < 5; i++)EXAMS.push(s.slice(i * size, (i + 1) * size));
+        for (let i = 0; i < 5; i++) EXAMS.push(s.slice(i * size, (i + 1) * size));
         saveExams();
       }
       renderExamButtons();
@@ -1396,7 +1365,7 @@
       localStorage.setItem('agentforce_completed_learning', '[]');
       localStorage.setItem('agentforce_completed_exam', '[]');
       const size = Math.ceil(s.length / 5);
-      for (let i = 0; i < 5; i++)EXAMS.push(s.slice(i * size, (i + 1) * size));
+      for (let i = 0; i < 5; i++) EXAMS.push(s.slice(i * size, (i + 1) * size));
       saveExams();
       renderExamButtons();
       $("step3num").classList.remove("done");
@@ -1430,7 +1399,6 @@
       $("step3num").classList.add("active");
     };
 
-    // Timer
     function startTimer() {
       clearInterval(timerInterval);
       examStartTime = Date.now();
@@ -1448,7 +1416,6 @@
       }, 1000);
     }
 
-    // Exam Flow
     function startRound(rt, stack) {
       if (!stack || !stack.length) return;
       currentRoundType = rt;
@@ -1587,7 +1554,6 @@
 
     $("helpToggle").onclick = () => $("helpBox").classList.toggle("hidden");
 
-    // Results
     function computeStats(st, arr) {
       let c = 0, w = [], dk = [], ns = [], cns = [], tt = 0;
       arr.forEach(qid => {
@@ -1635,7 +1601,6 @@
       let reviewHtml = "";
       if (baseState && baseStack) {
         const bs = computeStats(baseState, baseStack);
-        // Combine all questions for review (wrong + don't know + not sure, without duplicates)
         const allForReview = [...new Set([...bs.wrong, ...bs.dk, ...bs.ns])];
         reviewHtml = `<div id="reviewButtons">
       <button id="reviewAllBtn" ${allForReview.length ? "" : "disabled"}>📋 Всички за преглед (${allForReview.length})</button>
@@ -1660,7 +1625,6 @@
     </div>`;
       $("newExamBtn").onclick = resetToSetup;
       $("viewStatsBtn").onclick = () => { renderStatsPanel(); $("statsPanel").classList.remove('hidden'); };
-      // Review buttons work for both modes
       $("reviewAllBtn")?.addEventListener("click", () => {
         const bs = computeStats(baseState, baseStack);
         const allForReview = [...new Set([...bs.wrong, ...bs.dk, ...bs.ns])];
