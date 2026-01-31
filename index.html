@@ -4,6 +4,13 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <meta name="theme-color" content="#007bff">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="AF Exam">
+  <link rel="manifest" href="manifest.json">
+  <link rel="apple-touch-icon"
+    href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='20' fill='%23007bff'/><text x='50' y='65' text-anchor='middle' font-size='50'>📝</text></svg>">
   <title>Agentforce Exam</title>
   <style>
     :root {
@@ -665,6 +672,9 @@
   <div id="resultsPanel" class="hidden"></div>
 
   <script>
+    // Register Service Worker for PWA
+    if ('serviceWorker' in navigator) { navigator.serviceWorker.register('./service-worker.js').catch(() => { }); }
+
     const $ = id => document.getElementById(id);
 
     // State
@@ -682,19 +692,30 @@
 
     // Dark Mode
     if (localStorage.getItem('darkMode') === 'true') { document.body.classList.add('dark'); $("darkModeBtn").textContent = '☀️'; }
-    $("darkModeBtn").onclick = () => { document.body.classList.toggle('dark'); const d = document.body.classList.contains('dark'); $("darkModeBtn").textContent = d ? '☀️' : '🌙'; localStorage.setItem('darkMode', d); };
+    $("darkModeBtn").onclick = () => {
+      document.body.classList.toggle('dark');
+      const d = document.body.classList.contains('dark');
+      $("darkModeBtn").textContent = d ? '☀️' : '🌙';
+      localStorage.setItem('darkMode', d);
+    };
 
     // Load Questions
-    fetch("./agentforce_questions.json").then(r => { if (!r.ok) throw new Error(); return r.json(); }).then(d => {
-      d.questions.forEach(q => { QUESTIONS[q.number] = q; ALL_QIDS.push(q.number); });
-      $("loadStatus").textContent = `✅ ${ALL_QIDS.length} въпроса`;
-      $("loadStatus").style.color = "var(--success)";
-      $("step1num").classList.add("done");
-      $("step2num").classList.add("active");
-      $("learningModeBtn").disabled = false;
-      $("examModeBtn").disabled = false;
-      $("modeDesc").textContent = "Избери как искаш да се упражняваш.";
-    }).catch(() => { $("loadStatus").textContent = "❌ Грешка"; $("loadStatus").style.color = "var(--danger)"; });
+    fetch("./agentforce_questions.json")
+      .then(r => { if (!r.ok) throw new Error(); return r.json(); })
+      .then(d => {
+        d.questions.forEach(q => { QUESTIONS[q.number] = q; ALL_QIDS.push(q.number); });
+        $("loadStatus").textContent = `✅ ${ALL_QIDS.length} въпроса`;
+        $("loadStatus").style.color = "var(--success)";
+        $("step1num").classList.add("done");
+        $("step2num").classList.add("active");
+        $("learningModeBtn").disabled = false;
+        $("examModeBtn").disabled = false;
+        $("modeDesc").textContent = "Избери как искаш да се упражняваш.";
+      })
+      .catch(() => {
+        $("loadStatus").textContent = "❌ Грешка";
+        $("loadStatus").style.color = "var(--danger)";
+      });
 
     // Helpers
     function shuffle(a) { return a.map(v => ({ v, r: Math.random() })).sort((a, b) => a.r - b.r).map(x => x.v); }
@@ -715,45 +736,77 @@
     function saveHistory() { localStorage.setItem('agentforce_history', JSON.stringify(history)); }
     function saveWrong() { localStorage.setItem('agentforce_wrong', JSON.stringify(wrongCounts)); }
 
-    // Stats
+    // Stats Panel
     $("statsBtn").onclick = () => { renderStatsPanel(); $("statsPanel").classList.remove('hidden'); };
     $("closeStatsBtn").onclick = () => $("statsPanel").classList.add('hidden');
-    $("clearStatsBtn").onclick = () => { if (!confirm('Изтрий история и слаби точки?')) return; history = []; wrongCounts = {}; localStorage.removeItem('agentforce_history'); localStorage.removeItem('agentforce_wrong'); renderStatsPanel(); };
+
+    $("clearStatsBtn").onclick = () => {
+      if (!confirm('Изтрий история и слаби точки?')) return;
+      history = []; wrongCounts = {};
+      localStorage.removeItem('agentforce_history');
+      localStorage.removeItem('agentforce_wrong');
+      renderStatsPanel();
+    };
+
     $("resetAllBtn").onclick = () => {
       if (!confirm('⚠️ Това ще изтрие ВСИЧКО. Сигурен ли си?')) return;
       history = []; wrongCounts = {}; completedLearning.clear(); completedExam.clear(); EXAMS = [];
-      localStorage.removeItem('agentforce_history'); localStorage.removeItem('agentforce_wrong');
-      localStorage.removeItem('agentforce_completed_learning'); localStorage.removeItem('agentforce_completed_exam');
+      localStorage.removeItem('agentforce_history');
+      localStorage.removeItem('agentforce_wrong');
+      localStorage.removeItem('agentforce_completed_learning');
+      localStorage.removeItem('agentforce_completed_exam');
       localStorage.removeItem('agentforce_exams');
-      $("statsPanel").classList.add('hidden'); currentMode = null; selectedExamIndex = null;
-      $("learningModeBtn").classList.remove("selected"); $("examModeBtn").classList.remove("selected");
+      $("statsPanel").classList.add('hidden');
+      currentMode = null; selectedExamIndex = null;
+      $("learningModeBtn").classList.remove("selected");
+      $("examModeBtn").classList.remove("selected");
       $("step2num").classList.remove("done"); $("step2num").classList.add("active");
-      $("step3num").classList.remove("done", "active"); $("examButtons").innerHTML = "";
-      $("examPlaceholder").style.display = ""; $("reshuffleBtn").classList.add("hidden");
-      $("startBtn").disabled = true; $("modeDesc").textContent = "Избери как искаш да се упражняваш.";
+      $("step3num").classList.remove("done", "active");
+      $("examButtons").innerHTML = "";
+      $("examPlaceholder").style.display = "";
+      $("reshuffleBtn").classList.add("hidden");
+      $("startBtn").disabled = true;
+      $("modeDesc").textContent = "Избери как искаш да се упражняваш.";
     };
 
     function renderStatsPanel() {
-      const t = history.length, avgS = t ? Math.round(history.reduce((a, h) => a + h.pct, 0) / t) : 0;
+      const t = history.length;
+      const avgS = t ? Math.round(history.reduce((a, h) => a + h.pct, 0) / t) : 0;
       const avgT = t ? Math.round(history.reduce((a, h) => a + h.avgTime, 0) / t) : 0;
-      const passed = history.filter(h => h.pct >= 72).length, passR = t ? Math.round(passed / t * 100) : 0;
-      $("statTotalExams").textContent = t; $("statAvgScore").textContent = avgS + '%';
-      $("statAvgTime").textContent = avgT + 's'; $("statPassRate").textContent = passR + '%';
+      const passed = history.filter(h => h.pct >= 72).length;
+      const passR = t ? Math.round(passed / t * 100) : 0;
+      $("statTotalExams").textContent = t;
+      $("statAvgScore").textContent = avgS + '%';
+      $("statAvgTime").textContent = avgT + 's';
+      $("statPassRate").textContent = passR + '%';
       const sorted = Object.entries(wrongCounts).sort((a, b) => b[1] - a[1]).slice(0, 10);
       $("weakPointsList").innerHTML = sorted.length ? sorted.map(([q, c]) => `<div class="weak-item"><span>Q${q}</span><span>${c}x</span></div>`).join('') : '<div style="padding:8px;color:var(--text2);">Няма данни</div>';
       drawChart();
     }
 
     function drawChart() {
-      const canvas = $("historyChart"), ctx = canvas.getContext('2d'), w = canvas.width = canvas.offsetWidth, h = canvas.height = 120;
+      const canvas = $("historyChart"), ctx = canvas.getContext('2d');
+      const w = canvas.width = canvas.offsetWidth, h = canvas.height = 120;
       ctx.clearRect(0, 0, w, h);
       const cs = getComputedStyle(document.body);
-      if (history.length < 2) { ctx.fillStyle = cs.getPropertyValue('--text2'); ctx.font = '14px sans-serif'; ctx.textAlign = 'center'; ctx.fillText('Нужни са поне 2 изпита', w / 2, h / 2); return; }
+      if (history.length < 2) {
+        ctx.fillStyle = cs.getPropertyValue('--text2');
+        ctx.font = '14px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText('Нужни са поне 2 изпита', w / 2, h / 2);
+        return;
+      }
       const last10 = history.slice(-10), pad = 30, cW = w - pad * 2, cH = h - pad, stepX = cW / (last10.length - 1);
-      ctx.strokeStyle = cs.getPropertyValue('--danger'); ctx.setLineDash([5, 5]); ctx.beginPath();
-      const y72 = pad + cH * (1 - 72 / 100); ctx.moveTo(pad, y72); ctx.lineTo(w - pad, y72); ctx.stroke(); ctx.setLineDash([]);
-      ctx.strokeStyle = cs.getPropertyValue('--accent'); ctx.lineWidth = 2; ctx.beginPath();
-      last10.forEach((h, i) => { const x = pad + i * stepX, y = pad + cH * (1 - h.pct / 100); i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y); }); ctx.stroke();
+      ctx.strokeStyle = cs.getPropertyValue('--danger');
+      ctx.setLineDash([5, 5]);
+      ctx.beginPath();
+      const y72 = pad + cH * (1 - 72 / 100);
+      ctx.moveTo(pad, y72); ctx.lineTo(w - pad, y72);
+      ctx.stroke(); ctx.setLineDash([]);
+      ctx.strokeStyle = cs.getPropertyValue('--accent');
+      ctx.lineWidth = 2; ctx.beginPath();
+      last10.forEach((h, i) => { const x = pad + i * stepX, y = pad + cH * (1 - h.pct / 100); i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y); });
+      ctx.stroke();
       ctx.fillStyle = cs.getPropertyValue('--accent');
       last10.forEach((h, i) => { const x = pad + i * stepX, y = pad + cH * (1 - h.pct / 100); ctx.beginPath(); ctx.arc(x, y, 4, 0, Math.PI * 2); ctx.fill(); });
     }
@@ -767,7 +820,8 @@
       $("learningModeBtn").classList.toggle("selected", m === "learning");
       $("examModeBtn").classList.toggle("selected", m === "exam");
       $("modeDesc").textContent = m === "learning" ? "📚 Виждаш верния отговор веднага." : "📝 Резултатите се показват накрая.";
-      $("step2num").classList.remove("active"); $("step2num").classList.add("done");
+      $("step2num").classList.remove("active");
+      $("step2num").classList.add("done");
       $("step3num").classList.add("active");
       loadOrGenerateExams();
     }
@@ -778,7 +832,8 @@
       if (saved && Array.isArray(saved) && saved.length === 5 && saved[0] && saved[0].length > 0) {
         EXAMS = saved;
       } else {
-        const s = shuffle([...ALL_QIDS]); EXAMS = [];
+        const s = shuffle([...ALL_QIDS]);
+        EXAMS = [];
         const size = Math.ceil(s.length / 5);
         for (let i = 0; i < 5; i++)EXAMS.push(s.slice(i * size, (i + 1) * size));
         saveExams();
@@ -803,41 +858,59 @@
     $("reshuffleBtn").onclick = () => {
       const completed = getCompletedExams();
       if (completed.size > 0 && !confirm("Ще нулираш прогреса на изпитите. Сигурен ли си?")) return;
-      const s = shuffle([...ALL_QIDS]); EXAMS = [];
-      completedLearning.clear(); completedExam.clear();
+      const s = shuffle([...ALL_QIDS]);
+      EXAMS = [];
+      completedLearning.clear();
+      completedExam.clear();
       localStorage.setItem('agentforce_completed_learning', '[]');
       localStorage.setItem('agentforce_completed_exam', '[]');
       const size = Math.ceil(s.length / 5);
       for (let i = 0; i < 5; i++)EXAMS.push(s.slice(i * size, (i + 1) * size));
       saveExams();
       renderExamButtons();
-      $("step3num").classList.remove("done"); $("step3num").classList.add("active");
+      $("step3num").classList.remove("done");
+      $("step3num").classList.add("active");
     };
 
     $("examButtons").onclick = e => {
-      const btn = e.target.closest("button"); if (!btn) return;
+      const btn = e.target.closest("button");
+      if (!btn) return;
       $("examButtons").querySelectorAll("button").forEach(b => b.classList.remove("selected"));
       btn.classList.add("selected");
       selectedExamIndex = Number(btn.dataset.exam);
-      $("step3num").classList.remove("active"); $("step3num").classList.add("done");
+      $("step3num").classList.remove("active");
+      $("step3num").classList.add("done");
       $("startBtn").disabled = false;
     };
 
-    $("startBtn").onclick = () => { if (selectedExamIndex === null || !currentMode) return; startRound("base", EXAMS[selectedExamIndex]); };
+    $("startBtn").onclick = () => {
+      if (selectedExamIndex === null || !currentMode) return;
+      startRound("base", EXAMS[selectedExamIndex]);
+    };
 
     $("exitBtn").onclick = () => {
       if (!confirm("Прогресът ще бъде загубен.")) return;
-      clearInterval(timerInterval); $("examUI").classList.add("hidden"); $("setupPanel").classList.remove("hidden");
-      renderExamButtons(); $("step3num").classList.remove("done"); $("step3num").classList.add("active");
+      clearInterval(timerInterval);
+      $("examUI").classList.add("hidden");
+      $("setupPanel").classList.remove("hidden");
+      renderExamButtons();
+      $("step3num").classList.remove("done");
+      $("step3num").classList.add("active");
     };
 
     // Timer
     function startTimer() {
-      clearInterval(timerInterval); examStartTime = Date.now();
-      if (currentMode === "learning") { $("timer").classList.add("hidden"); return; }
-      $("timer").classList.remove("hidden"); $("timer").innerText = "Time: 105:00";
+      clearInterval(timerInterval);
+      examStartTime = Date.now();
+      if (currentMode === "learning") {
+        $("timer").classList.add("hidden");
+        return;
+      }
+      $("timer").classList.remove("hidden");
+      $("timer").innerText = "Time: 105:00";
       timerInterval = setInterval(() => {
-        const el = Math.floor((Date.now() - examStartTime) / 1000), rem = Math.max(EXAM_TIME_SECONDS - el, 0);
+        const el = Math.floor((Date.now() - examStartTime) / 1000);
+        const rem = Math.max(EXAM_TIME_SECONDS - el, 0);
         $("timer").innerText = `Time: ${String(Math.floor(rem / 60)).padStart(2, "0")}:${String(rem % 60).padStart(2, "0")}`;
         if (rem === 0) finishExam();
       }, 1000);
@@ -846,36 +919,65 @@
     // Exam Flow
     function startRound(rt, stack) {
       if (!stack || !stack.length) return;
-      currentRoundType = rt; STACK = stack.slice(); index = 0; questionState = {}; answerOrder = {};
-      $("setupPanel").classList.add("hidden"); $("statsPanel").classList.add("hidden");
-      $("resultsPanel").classList.add("hidden"); $("examUI").classList.remove("hidden");
+      currentRoundType = rt;
+      STACK = stack.slice();
+      index = 0;
+      questionState = {};
+      answerOrder = {};
+      $("setupPanel").classList.add("hidden");
+      $("statsPanel").classList.add("hidden");
+      $("resultsPanel").classList.add("hidden");
+      $("examUI").classList.remove("hidden");
       $("modeIndicator").textContent = currentMode === "learning" ? "📚 Learning" : "📝 Exam";
-      $("modeIndicator").className = currentMode; $("progressFill").style.width = "0%";
-      startTimer(); questionStartTime = Date.now(); showQuestion();
+      $("modeIndicator").className = currentMode;
+      $("progressFill").style.width = "0%";
+      startTimer();
+      questionStartTime = Date.now();
+      showQuestion();
     }
 
     function showQuestion() {
-      const qid = STACK[index], q = QUESTIONS[qid]; ensureOrderForQid(qid); const state = questionState[qid];
+      const qid = STACK[index], q = QUESTIONS[qid];
+      ensureOrderForQid(qid);
+      const state = questionState[qid];
       const answered = Object.values(questionState).filter(s => s.status && s.status !== "unanswered").length;
       $("progressFill").style.width = (answered / STACK.length * 100) + "%";
       $("counter").innerText = `[Q${qid}] ${index + 1}/${STACK.length}`;
-      $("question").innerText = q.question; $("answers").innerHTML = "";
-      $("resultLine").innerHTML = ""; $("resultLine").style.background = ""; $("resultLine").style.color = "";
+      $("question").innerText = q.question;
+      $("answers").innerHTML = "";
+      $("resultLine").innerHTML = "";
+      $("resultLine").style.background = "";
+      $("resultLine").style.color = "";
       $("questionTime").textContent = state?.time ? `⏱️ ${state.time}s` : "";
-      $("dontKnow").checked = state?.dontKnow || false; $("notSure").checked = state?.notSure || false;
+      $("dontKnow").checked = state?.dontKnow || false;
+      $("notSure").checked = state?.notSure || false;
       answerOrder[qid].forEach(([l, t], i) => {
         $("answers").innerHTML += `<div class="answer" data-letter="${l}"><span>(${i + 1})</span><label><input type="radio" name="answer" value="${l}">${t}</label></div>`;
       });
-      if (state?.selectedAnswer) { const r = document.querySelector(`input[name="answer"][value="${state.selectedAnswer}"]`); if (r) r.checked = true; }
+      if (state?.selectedAnswer) {
+        const r = document.querySelector(`input[name="answer"][value="${state.selectedAnswer}"]`);
+        if (r) r.checked = true;
+      }
       if (currentMode === "learning" && state && state.status && state.status !== "unanswered") {
         document.querySelectorAll('input[name="answer"]').forEach(r => r.disabled = true);
-        $("dontKnow").disabled = true; $("notSure").disabled = true;
+        $("dontKnow").disabled = true;
+        $("notSure").disabled = true;
         const selWrap = document.querySelector(`input[name="answer"][value="${state.selectedAnswer}"]`)?.closest(".answer");
-        if (state.status === "correct") { selWrap?.classList.add("correct"); $("resultLine").innerText = "✅ Вярно"; $("resultLine").style.background = "var(--success)"; $("resultLine").style.color = "#fff"; }
-        else { selWrap?.classList.add("wrong"); $("resultLine").innerText = `❌ Грешно → ${getCorrectText(qid)}`; $("resultLine").style.background = "var(--danger)"; $("resultLine").style.color = "#fff"; }
+        if (state.status === "correct") {
+          selWrap?.classList.add("correct");
+          $("resultLine").innerText = "✅ Вярно";
+          $("resultLine").style.background = "var(--success)";
+          $("resultLine").style.color = "#fff";
+        } else {
+          selWrap?.classList.add("wrong");
+          $("resultLine").innerText = `❌ Грешно → ${getCorrectText(qid)}`;
+          $("resultLine").style.background = "var(--danger)";
+          $("resultLine").style.color = "#fff";
+        }
       } else {
         document.querySelectorAll('input[name="answer"]').forEach(r => r.disabled = false);
-        $("dontKnow").disabled = false; $("notSure").disabled = false;
+        $("dontKnow").disabled = false;
+        $("notSure").disabled = false;
         if (!state || state.status === "unanswered") questionStartTime = Date.now();
       }
     }
@@ -884,57 +986,102 @@
       const qid = STACK[index], ex = questionState[qid];
       if (currentMode === "learning" && ex && ex.status && ex.status !== "unanswered") return;
       const sel = document.querySelector('input[name="answer"]:checked');
-      questionState[qid] = { selectedAnswer: sel ? sel.value : (ex?.selectedAnswer || null), status: ex?.status || "unanswered", dontKnow: $("dontKnow").checked, notSure: $("notSure").checked, time: ex?.time || 0 };
+      questionState[qid] = {
+        selectedAnswer: sel ? sel.value : (ex?.selectedAnswer || null),
+        status: ex?.status || "unanswered",
+        dontKnow: $("dontKnow").checked,
+        notSure: $("notSure").checked,
+        time: ex?.time || 0
+      };
     }
 
     $("answers").onchange = e => { if (e.target?.name === "answer") upsertDraftState(); };
-    $("answers").onclick = e => { const d = e.target.closest(".answer"); if (d) { const r = d.querySelector('input[type="radio"]'); if (r && !r.disabled) { r.checked = true; upsertDraftState(); } } };
-    $("dontKnow").onchange = upsertDraftState; $("notSure").onchange = upsertDraftState;
+    $("answers").onclick = e => {
+      const d = e.target.closest(".answer");
+      if (d) {
+        const r = d.querySelector('input[type="radio"]');
+        if (r && !r.disabled) { r.checked = true; upsertDraftState(); }
+      }
+    };
+    $("dontKnow").onchange = upsertDraftState;
+    $("notSure").onchange = upsertDraftState;
 
     function checkCurrentQuestion() {
-      const qid = STACK[index], q = QUESTIONS[qid], sel = document.querySelector('input[name="answer"]:checked');
+      const qid = STACK[index], q = QUESTIONS[qid];
+      const sel = document.querySelector('input[name="answer"]:checked');
       if (!sel) return false;
-      const t = Math.round((Date.now() - questionStartTime) / 1000), ok = q.correct.includes(sel.value);
-      questionState[qid] = { selectedAnswer: sel.value, status: ok ? "correct" : "wrong", dontKnow: $("dontKnow").checked, notSure: $("notSure").checked, time: t };
+      const t = Math.round((Date.now() - questionStartTime) / 1000);
+      const ok = q.correct.includes(sel.value);
+      questionState[qid] = {
+        selectedAnswer: sel.value,
+        status: ok ? "correct" : "wrong",
+        dontKnow: $("dontKnow").checked,
+        notSure: $("notSure").checked,
+        time: t
+      };
       if (!ok) { wrongCounts[qid] = (wrongCounts[qid] || 0) + 1; saveWrong(); }
       return true;
     }
 
     function nextAction() {
-      const state = questionState[STACK[index]], sel = document.querySelector('input[name="answer"]:checked');
+      const state = questionState[STACK[index]];
+      const sel = document.querySelector('input[name="answer"]:checked');
       if (!sel) return;
       if (currentMode === "learning") {
         if (!state || state.status === "unanswered") { checkCurrentQuestion(); showQuestion(); return; }
-        if (index < STACK.length - 1) { index++; questionStartTime = Date.now(); showQuestion(); } else finishExam();
+        if (index < STACK.length - 1) { index++; questionStartTime = Date.now(); showQuestion(); }
+        else finishExam();
       } else {
         checkCurrentQuestion();
-        if (index < STACK.length - 1) { index++; questionStartTime = Date.now(); showQuestion(); } else finishExam();
+        if (index < STACK.length - 1) { index++; questionStartTime = Date.now(); showQuestion(); }
+        else finishExam();
       }
     }
 
-    $("nextBtn").onclick = nextAction; $("backBtn").onclick = () => { if (index > 0) { index--; showQuestion(); } };
+    $("nextBtn").onclick = nextAction;
+    $("backBtn").onclick = () => { if (index > 0) { index--; showQuestion(); } };
+
     document.onkeydown = e => {
       if ($("examUI").classList.contains("hidden")) return;
-      if (["1", "2", "3", "4"].includes(e.key)) { const r = document.querySelectorAll('input[name="answer"]'); if (r[e.key - 1] && !r[e.key - 1].disabled) { r[e.key - 1].checked = true; upsertDraftState(); } }
+      if (["1", "2", "3", "4"].includes(e.key)) {
+        const r = document.querySelectorAll('input[name="answer"]');
+        if (r[e.key - 1] && !r[e.key - 1].disabled) { r[e.key - 1].checked = true; upsertDraftState(); }
+      }
       if (e.key === "ArrowRight" || e.key === "Enter") nextAction();
       if (e.key === "ArrowLeft" && index > 0) { index--; showQuestion(); }
     };
+
     $("helpToggle").onclick = () => $("helpBox").classList.toggle("hidden");
 
     // Results
     function computeStats(st, arr) {
       let c = 0, w = [], dk = [], ns = [], cns = [], tt = 0;
-      arr.forEach(qid => { const s = st[qid]; if (!s || !s.status || s.status === "unanswered") return; if (s.dontKnow) dk.push(qid); if (s.notSure) ns.push(qid); tt += s.time || 0; if (s.status === "correct") { c++; if (s.notSure) cns.push(qid); } else w.push(qid); });
+      arr.forEach(qid => {
+        const s = st[qid];
+        if (!s || !s.status || s.status === "unanswered") return;
+        if (s.dontKnow) dk.push(qid);
+        if (s.notSure) ns.push(qid);
+        tt += s.time || 0;
+        if (s.status === "correct") { c++; if (s.notSure) cns.push(qid); }
+        else w.push(qid);
+      });
       return { correct: c, wrong: w, dk, ns, correctButNotSure: cns, totalTime: tt };
     }
 
     function finishExam() {
-      clearInterval(timerInterval); $("examUI").classList.add("hidden");
+      clearInterval(timerInterval);
+      $("examUI").classList.add("hidden");
       if (currentRoundType === "base") {
-        baseState = deepClone(questionState); baseStack = STACK.slice();
-        if (selectedExamIndex !== null) { getCompletedExams().add(selectedExamIndex); saveCompleted(); }
-        const st = computeStats(questionState, STACK), t = STACK.length;
-        const pct = t ? Math.round(st.correct / t * 100) : 0, avgT = t ? Math.round(st.totalTime / t) : 0;
+        baseState = deepClone(questionState);
+        baseStack = STACK.slice();
+        if (selectedExamIndex !== null) {
+          getCompletedExams().add(selectedExamIndex);
+          saveCompleted();
+        }
+        const st = computeStats(questionState, STACK);
+        const t = STACK.length;
+        const pct = t ? Math.round(st.correct / t * 100) : 0;
+        const avgT = t ? Math.round(st.totalTime / t) : 0;
         history.push({ date: new Date().toISOString(), mode: currentMode, total: t, correct: st.correct, pct, avgTime: avgT });
         saveHistory();
       }
@@ -943,16 +1090,36 @@
 
     function renderResultsScreen() {
       $("resultsPanel").classList.remove("hidden");
-      const t = STACK.length, { correct, wrong, dk, ns, correctButNotSure, totalTime } = computeStats(questionState, STACK);
-      const pct = t ? Math.round(correct / t * 100) : 0, passed = pct >= 72, avgT = t ? Math.round(totalTime / t) : 0;
+      const t = STACK.length;
+      const { correct, wrong, dk, ns, correctButNotSure, totalTime } = computeStats(questionState, STACK);
+      const pct = t ? Math.round(correct / t * 100) : 0;
+      const passed = pct >= 72;
+      const avgT = t ? Math.round(totalTime / t) : 0;
       const mLabel = currentMode === "learning" ? "📚 Learning" : "📝 Exam";
       const titles = { base: "Резултат", reviewWrong: "Грешни", reviewNotSure: "Несигурни", reviewDontKnow: "Не знам" };
       let reviewHtml = "";
       if (baseState && baseStack && currentMode === "learning") {
         const bs = computeStats(baseState, baseStack);
-        reviewHtml = `<div id="reviewButtons"><button id="reviewWrongBtn" ${bs.wrong.length ? "" : "disabled"}>🔁 Грешни (${bs.wrong.length})</button><button id="reviewNotSureBtn" ${bs.ns.length ? "" : "disabled"}>⚠️ Несигурни (${bs.ns.length})</button><button id="reviewDontKnowBtn" ${bs.dk.length ? "" : "disabled"}>❓ Не знам (${bs.dk.length})</button>${currentRoundType !== "base" ? `<button id="backToBaseResultsBtn">⬅️ Основен</button>` : ""}</div>`;
+        reviewHtml = `<div id="reviewButtons">
+      <button id="reviewWrongBtn" ${bs.wrong.length ? "" : "disabled"}>🔁 Грешни (${bs.wrong.length})</button>
+      <button id="reviewNotSureBtn" ${bs.ns.length ? "" : "disabled"}>⚠️ Несигурни (${bs.ns.length})</button>
+      <button id="reviewDontKnowBtn" ${bs.dk.length ? "" : "disabled"}>❓ Не знам (${bs.dk.length})</button>
+      ${currentRoundType !== "base" ? `<button id="backToBaseResultsBtn">⬅️ Основен</button>` : ""}
+    </div>`;
       }
-      $("resultsPanel").innerHTML = `<h3>${titles[currentRoundType]} <small style="font-weight:normal;color:var(--text2);">(${mLabel})</small></h3><p style="font-size:20px;"><strong>${passed ? "✅ ВЗЕТ" : "❌ НЕ Е ВЗЕТ"}</strong> (мин. 72%)</p><p><strong>Верни:</strong> ${correct}/${t} (${pct}%)</p><p>❌ <strong>Грешни:</strong> ${wrong.length ? wrong.join(", ") : "—"}</p><p>⚠️ <strong>Верни, но несигурни:</strong> ${correctButNotSure.length ? correctButNotSure.join(", ") : "—"}</p><p>❓ <strong>Не знам:</strong> ${dk.length ? dk.join(", ") : "—"}</p><p>⏱️ <strong>Време:</strong> ${Math.floor(totalTime / 60)}m ${totalTime % 60}s (${avgT}s/въпр.)</p>${reviewHtml}<div style="margin-top:16px;display:flex;gap:10px;flex-wrap:wrap;"><button id="newExamBtn" style="flex:1;">🔄 Нов изпит</button><button id="viewStatsBtn" style="flex:1;">📊 Статистики</button></div>`;
+      $("resultsPanel").innerHTML = `
+    <h3>${titles[currentRoundType]} <small style="font-weight:normal;color:var(--text2);">(${mLabel})</small></h3>
+    <p style="font-size:20px;"><strong>${passed ? "✅ ВЗЕТ" : "❌ НЕ Е ВЗЕТ"}</strong> (мин. 72%)</p>
+    <p><strong>Верни:</strong> ${correct}/${t} (${pct}%)</p>
+    <p>❌ <strong>Грешни:</strong> ${wrong.length ? wrong.join(", ") : "—"}</p>
+    <p>⚠️ <strong>Верни, но несигурни:</strong> ${correctButNotSure.length ? correctButNotSure.join(", ") : "—"}</p>
+    <p>❓ <strong>Не знам:</strong> ${dk.length ? dk.join(", ") : "—"}</p>
+    <p>⏱️ <strong>Време:</strong> ${Math.floor(totalTime / 60)}m ${totalTime % 60}s (${avgT}s/въпр.)</p>
+    ${reviewHtml}
+    <div style="margin-top:16px;display:flex;gap:10px;flex-wrap:wrap;">
+      <button id="newExamBtn" style="flex:1;">🔄 Нов изпит</button>
+      <button id="viewStatsBtn" style="flex:1;">📊 Статистики</button>
+    </div>`;
       $("newExamBtn").onclick = resetToSetup;
       $("viewStatsBtn").onclick = () => { renderStatsPanel(); $("statsPanel").classList.remove('hidden'); };
       if (currentMode === "learning") {
@@ -964,9 +1131,25 @@
     }
 
     function resetToSetup() {
-      $("resultsPanel").classList.add("hidden"); $("setupPanel").classList.remove("hidden");
-      if (EXAMS.length > 0 && currentMode) { renderExamButtons(); $("step3num").classList.remove("done"); $("step3num").classList.add("active"); }
-      else { currentMode = null; $("learningModeBtn").classList.remove("selected"); $("examModeBtn").classList.remove("selected"); $("step2num").classList.remove("done"); $("step2num").classList.add("active"); $("step3num").classList.remove("done", "active"); $("examButtons").innerHTML = ""; $("examPlaceholder").style.display = ""; $("reshuffleBtn").classList.add("hidden"); $("startBtn").disabled = true; $("modeDesc").textContent = "Избери как искаш да се упражняваш."; }
+      $("resultsPanel").classList.add("hidden");
+      $("setupPanel").classList.remove("hidden");
+      if (EXAMS.length > 0 && currentMode) {
+        renderExamButtons();
+        $("step3num").classList.remove("done");
+        $("step3num").classList.add("active");
+      } else {
+        currentMode = null;
+        $("learningModeBtn").classList.remove("selected");
+        $("examModeBtn").classList.remove("selected");
+        $("step2num").classList.remove("done");
+        $("step2num").classList.add("active");
+        $("step3num").classList.remove("done", "active");
+        $("examButtons").innerHTML = "";
+        $("examPlaceholder").style.display = "";
+        $("reshuffleBtn").classList.add("hidden");
+        $("startBtn").disabled = true;
+        $("modeDesc").textContent = "Избери как искаш да се упражняваш.";
+      }
     }
   </script>
 </body>
