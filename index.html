@@ -943,7 +943,7 @@
     }
 
     // ==================== CLOUD SYNC ====================
-    const NPOINT_API = 'https://api.npoint.io';
+    const JSONBIN_API = 'https://api.jsonbin.io/v3/b';
     let syncBlobId = localStorage.getItem('agentforce_sync_id');
     let syncDebounceTimer = null;
     let lastSyncTime = parseInt(localStorage.getItem('agentforce_last_sync') || '0');
@@ -1026,15 +1026,18 @@
       try {
         setSyncStatus('🔄');
         const data = getAllLocalData();
-        const res = await fetch(NPOINT_API, {
+        const res = await fetch(JSONBIN_API, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Bin-Private': 'false'
+          },
           body: JSON.stringify(data)
         });
         if (!res.ok) throw new Error('Create failed');
         const result = await res.json();
-        // npoint.io returns the full URL, extract the ID
-        const id = result.id || (result._id) || (typeof result === 'string' ? result : null);
+        // jsonbin.io returns ID in metadata.id
+        const id = result.metadata?.id;
         if (id) {
           syncBlobId = id;
           localStorage.setItem('agentforce_sync_id', id);
@@ -1056,11 +1059,12 @@
       if (!syncBlobId) return null;
       try {
         setSyncStatus('🔄');
-        const res = await fetch(`${NPOINT_API}/${syncBlobId}`);
+        const res = await fetch(`${JSONBIN_API}/${syncBlobId}/latest`);
         if (!res.ok) throw new Error('Fetch failed');
-        const data = await res.json();
+        const result = await res.json();
+        // jsonbin.io returns data in record field
         setSyncStatus('✅');
-        return data;
+        return result.record;
       } catch (e) {
         console.error('Fetch cloud error:', e);
         setSyncStatus('❌');
@@ -1076,8 +1080,8 @@
       try {
         setSyncStatus('🔄');
         const data = getAllLocalData();
-        const res = await fetch(`${NPOINT_API}/${syncBlobId}`, {
-          method: 'POST',
+        const res = await fetch(`${JSONBIN_API}/${syncBlobId}`, {
+          method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(data)
         });
