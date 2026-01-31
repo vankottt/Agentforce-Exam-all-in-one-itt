@@ -946,6 +946,7 @@
     }
 
     // ==================== CLOUD SYNC (Firebase) ====================
+    // ==================== CLOUD SYNC (Firebase) ====================
     const firebaseConfig = {
       apiKey: "AIzaSyDG0A7yLL9pjMdP07uqEEHODiT2n17CTyQ",
       authDomain: "agentforce-exam.firebaseapp.com",
@@ -956,14 +957,60 @@
       appId: "1:1022127011324:web:786874340ad01947a32e79"
     };
 
-    // Initialize Firebase
-    try {
-      if (!firebase.apps.length) {
-        firebase.initializeApp(firebaseConfig);
-      }
-    } catch (e) { console.error("Firebase init error", e); }
+    let db = null;
+    let firebaseInitialized = false;
 
-    const db = firebase.database();
+    // Initialize Firebase
+    function initFirebase() {
+      try {
+        if (typeof firebase === 'undefined') {
+          console.error("Firebase SDK not loaded");
+          setSyncStatus('❌ SDK Error');
+          return;
+        }
+        if (!firebase.apps.length) {
+          firebase.initializeApp(firebaseConfig);
+        }
+        db = firebase.database();
+        firebaseInitialized = true;
+        console.log("Firebase initialized successfully");
+
+        // Connection test
+        const connectedRef = db.ref(".info/connected");
+        connectedRef.on("value", (snap) => {
+          if (snap.val() === true) {
+            console.log("🔥 Firebase connected!");
+            setSyncStatus('✅');
+          } else {
+            console.log("⚠️ Firebase disconnected");
+            setSyncStatus('📡');
+          }
+        });
+
+      } catch (e) {
+        console.error("Firebase init error", e);
+        setSyncStatus('❌ Init Error');
+      }
+    }
+
+    // Attempt init after a short delay to ensure scripts loaded
+    setTimeout(initFirebase, 1000);
+
+    // Global test function
+    window.testFirebaseConnection = async () => {
+      if (!db) { console.error("DB not initialized"); return; }
+      try {
+        console.log("Attempting write...");
+        await db.ref('connection_test').set({ timestamp: Date.now(), status: 'ok' });
+        console.log("Write success!");
+        const snap = await db.ref('connection_test').once('value');
+        console.log("Read success:", snap.val());
+        alert("Firebase Connection OK! ✅");
+      } catch (e) {
+        console.error("Test failed:", e);
+        alert("Firebase Error: " + e.message);
+      }
+    };
     let syncBlobId = localStorage.getItem('agentforce_sync_id');
     let syncDebounceTimer = null;
     let lastSyncTime = parseInt(localStorage.getItem('agentforce_last_sync') || '0');
