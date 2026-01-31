@@ -711,6 +711,17 @@
         $("learningModeBtn").disabled = false;
         $("examModeBtn").disabled = false;
         $("modeDesc").textContent = "Избери как искаш да се упражняваш.";
+
+        // Check for saved session and offer to resume
+        const savedSession = getExamSession();
+        if (savedSession && savedSession.stack && savedSession.stack.length > 0) {
+          const answered = Object.values(savedSession.questionState || {}).filter(s => s.status && s.status !== "unanswered").length;
+          if (confirm(`Имаш незавършен изпит (${answered}/${savedSession.stack.length} отговорени). Искаш ли да продължиш?`)) {
+            resumeExamSession(savedSession);
+          } else {
+            clearExamSession();
+          }
+        }
       })
       .catch(() => {
         $("loadStatus").textContent = "❌ Грешка";
@@ -735,6 +746,69 @@
     function saveExams() { localStorage.setItem('agentforce_exams', JSON.stringify(EXAMS)); }
     function saveHistory() { localStorage.setItem('agentforce_history', JSON.stringify(history)); }
     function saveWrong() { localStorage.setItem('agentforce_wrong', JSON.stringify(wrongCounts)); }
+
+    // Session persistence - save current exam progress
+    function saveExamSession() {
+      if (!STACK.length) return;
+      const session = {
+        stack: STACK,
+        index,
+        questionState,
+        answerOrder,
+        examStartTime,
+        currentMode,
+        selectedExamIndex,
+        currentRoundType,
+        baseStack,
+        baseState
+      };
+      localStorage.setItem('agentforce_session', JSON.stringify(session));
+    }
+    function clearExamSession() {
+      localStorage.removeItem('agentforce_session');
+    }
+    function getExamSession() {
+      try {
+        return JSON.parse(localStorage.getItem('agentforce_session'));
+      } catch { return null; }
+    }
+    function resumeExamSession(session) {
+      // Restore all state from saved session
+      STACK = session.stack;
+      index = session.index;
+      questionState = session.questionState || {};
+      answerOrder = session.answerOrder || {};
+      examStartTime = session.examStartTime;
+      currentMode = session.currentMode;
+      selectedExamIndex = session.selectedExamIndex;
+      currentRoundType = session.currentRoundType;
+      baseStack = session.baseStack;
+      baseState = session.baseState;
+
+      // Show exam UI
+      $("setupPanel").classList.add("hidden");
+      $("statsPanel").classList.add("hidden");
+      $("resultsPanel").classList.add("hidden");
+      $("examUI").classList.remove("hidden");
+      $("modeIndicator").textContent = currentMode === "learning" ? "📚 Learning" : "📝 Exam";
+      $("modeIndicator").className = currentMode;
+
+      // Resume timer for exam mode
+      if (currentMode === "exam") {
+        $("timer").classList.remove("hidden");
+        timerInterval = setInterval(() => {
+          const el = Math.floor((Date.now() - examStartTime) / 1000);
+          const rem = Math.max(EXAM_TIME_SECONDS - el, 0);
+          $("timer").innerText = `Time: ${String(Math.floor(rem / 60)).padStart(2, "0")}:${String(rem % 60).padStart(2, "0")}`;
+          if (rem === 0) finishExam();
+        }, 1000);
+      } else {
+        $("timer").classList.add("hidden");
+      }
+
+      questionStartTime = Date.now();
+      showQuestion();
+    }
 
     // Stats Panel
     $("statsBtn").onclick = () => { renderStatsPanel(); $("statsPanel").classList.remove('hidden'); };
@@ -889,8 +963,9 @@
     };
 
     $("exitBtn").onclick = () => {
-      if (!confirm("Прогресът ще бъде загубен.")) return;
+      if (!confirm("Сигурен ли си, че искаш да излезеш? Прогресът ще бъде изтрит.")) return;
       clearInterval(timerInterval);
+      clearExamSession();
       $("examUI").classList.add("hidden");
       $("setupPanel").classList.remove("hidden");
       renderExamButtons();
@@ -993,6 +1068,7 @@
         notSure: $("notSure").checked,
         time: ex?.time || 0
       };
+      saveExamSession();
     }
 
     $("answers").onchange = e => { if (e.target?.name === "answer") upsertDraftState(); };
@@ -1020,6 +1096,7 @@
         time: t
       };
       if (!ok) { wrongCounts[qid] = (wrongCounts[qid] || 0) + 1; saveWrong(); }
+      saveExamSession();
       return true;
     }
 
@@ -1029,17 +1106,17 @@
       if (!sel) return;
       if (currentMode === "learning") {
         if (!state || state.status === "unanswered") { checkCurrentQuestion(); showQuestion(); return; }
-        if (index < STACK.length - 1) { index++; questionStartTime = Date.now(); showQuestion(); }
+        if (index < STACK.length - 1) { index++; questionStartTime = Date.now(); showQuestion(); saveExamSession(); }
         else finishExam();
       } else {
         checkCurrentQuestion();
-        if (index < STACK.length - 1) { index++; questionStartTime = Date.now(); showQuestion(); }
+        if (index < STACK.length - 1) { index++; questionStartTime = Date.now(); showQuestion(); saveExamSession(); }
         else finishExam();
       }
     }
 
     $("nextBtn").onclick = nextAction;
-    $("backBtn").onclick = () => { if (index > 0) { index--; showQuestion(); } };
+    $("backBtn").onclick = () => { if (index > 0) { index--; showQuestion(); saveExamSession(); } };
 
     document.onkeydown = e => {
       if ($("examUI").classList.contains("hidden")) return;
@@ -1070,6 +1147,7 @@
 
     function finishExam() {
       clearInterval(timerInterval);
+      clearExamSession();
       $("examUI").classList.add("hidden");
       if (currentRoundType === "base") {
         baseState = deepClone(questionState);
