@@ -943,7 +943,7 @@
     }
 
     // ==================== CLOUD SYNC ====================
-    const JSONBLOB_API = 'https://jsonblob.com/api/jsonBlob';
+    const NPOINT_API = 'https://api.npoint.io';
     let syncBlobId = localStorage.getItem('agentforce_sync_id');
     let syncDebounceTimer = null;
     let lastSyncTime = parseInt(localStorage.getItem('agentforce_last_sync') || '0');
@@ -974,11 +974,12 @@
       if (cloud.exams && cloud.exams.length) EXAMS = cloud.exams;
       if (cloud.session) localStorage.setItem('agentforce_session', JSON.stringify(cloud.session));
 
-      // Save to localStorage
-      saveCompleted();
-      saveHistory();
-      saveWrong();
-      if (EXAMS.length) saveExams();
+      // Save directly to localStorage (avoid triggering sync hooks)
+      localStorage.setItem('agentforce_completed_learning', JSON.stringify([...completedLearning]));
+      localStorage.setItem('agentforce_completed_exam', JSON.stringify([...completedExam]));
+      localStorage.setItem('agentforce_history', JSON.stringify(history));
+      localStorage.setItem('agentforce_wrong', JSON.stringify(wrongCounts));
+      if (EXAMS.length) localStorage.setItem('agentforce_exams', JSON.stringify(EXAMS));
     }
 
     function mergeData(local, cloud) {
@@ -1025,14 +1026,15 @@
       try {
         setSyncStatus('🔄');
         const data = getAllLocalData();
-        const res = await fetch(JSONBLOB_API, {
+        const res = await fetch(NPOINT_API, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(data)
         });
         if (!res.ok) throw new Error('Create failed');
-        const blobUrl = res.headers.get('X-Jsonblob') || res.headers.get('location') || '';
-        const id = blobUrl.split('/').pop() || blobUrl;
+        const result = await res.json();
+        // npoint.io returns the full URL, extract the ID
+        const id = result.id || (result._id) || (typeof result === 'string' ? result : null);
         if (id) {
           syncBlobId = id;
           localStorage.setItem('agentforce_sync_id', id);
@@ -1054,7 +1056,7 @@
       if (!syncBlobId) return null;
       try {
         setSyncStatus('🔄');
-        const res = await fetch(`${JSONBLOB_API}/${syncBlobId}`);
+        const res = await fetch(`${NPOINT_API}/${syncBlobId}`);
         if (!res.ok) throw new Error('Fetch failed');
         const data = await res.json();
         setSyncStatus('✅');
@@ -1074,8 +1076,8 @@
       try {
         setSyncStatus('🔄');
         const data = getAllLocalData();
-        const res = await fetch(`${JSONBLOB_API}/${syncBlobId}`, {
-          method: 'PUT',
+        const res = await fetch(`${NPOINT_API}/${syncBlobId}`, {
+          method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(data)
         });
