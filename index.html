@@ -1096,11 +1096,14 @@
       const passed = pct >= 72;
       const avgT = t ? Math.round(totalTime / t) : 0;
       const mLabel = currentMode === "learning" ? "📚 Learning" : "📝 Exam";
-      const titles = { base: "Резултат", reviewWrong: "Грешни", reviewNotSure: "Несигурни", reviewDontKnow: "Не знам" };
+      const titles = { base: "Резултат", reviewWrong: "Грешни", reviewNotSure: "Несигурни", reviewDontKnow: "Не знам", reviewAll: "Всички за преглед" };
       let reviewHtml = "";
-      if (baseState && baseStack && currentMode === "learning") {
+      if (baseState && baseStack) {
         const bs = computeStats(baseState, baseStack);
+        // Combine all questions for review (wrong + don't know + not sure, without duplicates)
+        const allForReview = [...new Set([...bs.wrong, ...bs.dk, ...bs.ns])];
         reviewHtml = `<div id="reviewButtons">
+      <button id="reviewAllBtn" ${allForReview.length ? "" : "disabled"}>📋 Всички за преглед (${allForReview.length})</button>
       <button id="reviewWrongBtn" ${bs.wrong.length ? "" : "disabled"}>🔁 Грешни (${bs.wrong.length})</button>
       <button id="reviewNotSureBtn" ${bs.ns.length ? "" : "disabled"}>⚠️ Несигурни (${bs.ns.length})</button>
       <button id="reviewDontKnowBtn" ${bs.dk.length ? "" : "disabled"}>❓ Не знам (${bs.dk.length})</button>
@@ -1122,12 +1125,17 @@
     </div>`;
       $("newExamBtn").onclick = resetToSetup;
       $("viewStatsBtn").onclick = () => { renderStatsPanel(); $("statsPanel").classList.remove('hidden'); };
-      if (currentMode === "learning") {
-        $("reviewWrongBtn")?.addEventListener("click", () => { $("resultsPanel").classList.add("hidden"); startRound("reviewWrong", computeStats(baseState, baseStack).wrong); });
-        $("reviewNotSureBtn")?.addEventListener("click", () => { $("resultsPanel").classList.add("hidden"); startRound("reviewNotSure", computeStats(baseState, baseStack).ns); });
-        $("reviewDontKnowBtn")?.addEventListener("click", () => { $("resultsPanel").classList.add("hidden"); startRound("reviewDontKnow", computeStats(baseState, baseStack).dk); });
-        $("backToBaseResultsBtn")?.addEventListener("click", () => { currentRoundType = "base"; questionState = deepClone(baseState); STACK = baseStack.slice(); renderResultsScreen(); });
-      }
+      // Review buttons work for both modes
+      $("reviewAllBtn")?.addEventListener("click", () => {
+        const bs = computeStats(baseState, baseStack);
+        const allForReview = [...new Set([...bs.wrong, ...bs.dk, ...bs.ns])];
+        $("resultsPanel").classList.add("hidden");
+        startRound("reviewAll", allForReview);
+      });
+      $("reviewWrongBtn")?.addEventListener("click", () => { $("resultsPanel").classList.add("hidden"); startRound("reviewWrong", computeStats(baseState, baseStack).wrong); });
+      $("reviewNotSureBtn")?.addEventListener("click", () => { $("resultsPanel").classList.add("hidden"); startRound("reviewNotSure", computeStats(baseState, baseStack).ns); });
+      $("reviewDontKnowBtn")?.addEventListener("click", () => { $("resultsPanel").classList.add("hidden"); startRound("reviewDontKnow", computeStats(baseState, baseStack).dk); });
+      $("backToBaseResultsBtn")?.addEventListener("click", () => { currentRoundType = "base"; questionState = deepClone(baseState); STACK = baseStack.slice(); renderResultsScreen(); });
     }
 
     function resetToSetup() {
