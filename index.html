@@ -566,11 +566,143 @@
         flex: 1
       }
     }
+
+    /* Sync styles */
+    .header-buttons {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+    }
+
+    #syncBtn {
+      padding: 8px 12px;
+      font-size: 14px;
+      position: relative;
+    }
+
+    #syncStatus {
+      font-size: 12px;
+      margin-left: 4px;
+    }
+
+    .sync-modal {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0, 0, 0, 0.5);
+      z-index: 1000;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .sync-modal.show {
+      display: flex;
+    }
+
+    .sync-modal-content {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 20px;
+      max-width: 400px;
+      width: 90%;
+    }
+
+    .sync-modal h3 {
+      margin: 0 0 16px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .sync-id-box {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 12px;
+    }
+
+    .sync-id-box input {
+      flex: 1;
+      padding: 10px;
+      font-size: 14px;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      background: var(--bg2);
+      color: var(--text);
+      font-family: monospace;
+    }
+
+    .sync-id-box button {
+      padding: 10px 14px;
+    }
+
+    .sync-section {
+      margin-bottom: 16px;
+      padding-bottom: 16px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .sync-section:last-child {
+      margin-bottom: 0;
+      padding-bottom: 0;
+      border-bottom: none;
+    }
+
+    .sync-section label {
+      display: block;
+      font-weight: 600;
+      margin-bottom: 8px;
+      font-size: 14px;
+    }
+
+    .sync-info {
+      font-size: 13px;
+      color: var(--text2);
+      margin-top: 8px;
+    }
   </style>
 </head>
 
 <body>
-  <h2>Agentforce Exam <button id="darkModeBtn">🌙</button></h2>
+  <h2>Agentforce Exam
+    <span class="header-buttons">
+      <button id="syncBtn">🔗<span id="syncStatus"></span></button>
+      <button id="darkModeBtn">🌙</button>
+    </span>
+  </h2>
+
+  <!-- Sync Modal -->
+  <div id="syncModal" class="sync-modal">
+    <div class="sync-modal-content">
+      <h3>☁️ Cloud Sync <button id="closeSyncModal" style="padding:6px 10px;font-size:12px;">✕</button></h3>
+
+      <div class="sync-section">
+        <label>📋 Твоето Sync ID:</label>
+        <div class="sync-id-box">
+          <input type="text" id="currentSyncId" readonly placeholder="Генерира се...">
+          <button id="copySyncIdBtn">📋</button>
+        </div>
+        <div class="sync-info">Сподели това ID на друго устройство за синхронизация.</div>
+      </div>
+
+      <div class="sync-section">
+        <label>🔗 Свържи се с друго устройство:</label>
+        <div class="sync-id-box">
+          <input type="text" id="otherSyncId" placeholder="Въведи Sync ID">
+          <button id="connectSyncBtn">🔗</button>
+        </div>
+        <div class="sync-info">⚠️ Това ще замени локалните данни с данните от другото устройство.</div>
+      </div>
+
+      <div class="sync-section">
+        <button id="forceSyncBtn" style="width:100%;">🔄 Принудителна синхронизация</button>
+        <div class="sync-info" id="lastSyncInfo">Последна синхр.: никога</div>
+      </div>
+    </div>
+  </div>
 
   <div id="statsPanel" class="hidden">
     <h3>📊 Статистики <button id="closeStatsBtn" style="padding:6px 10px;font-size:12px;">✕</button></h3>
@@ -809,6 +941,272 @@
       questionStartTime = Date.now();
       showQuestion();
     }
+
+    // ==================== CLOUD SYNC ====================
+    const JSONBLOB_API = 'https://jsonblob.com/api/jsonBlob';
+    let syncBlobId = localStorage.getItem('agentforce_sync_id');
+    let syncDebounceTimer = null;
+    let lastSyncTime = parseInt(localStorage.getItem('agentforce_last_sync') || '0');
+
+    function setSyncStatus(status) {
+      const el = $("syncStatus");
+      el.textContent = status;
+    }
+
+    function getAllLocalData() {
+      return {
+        timestamp: Date.now(),
+        completedLearning: [...completedLearning],
+        completedExam: [...completedExam],
+        history: history,
+        wrongCounts: wrongCounts,
+        exams: EXAMS,
+        session: getExamSession()
+      };
+    }
+
+    function applyCloudData(cloud) {
+      if (!cloud) return;
+      if (cloud.completedLearning) completedLearning = new Set(cloud.completedLearning);
+      if (cloud.completedExam) completedExam = new Set(cloud.completedExam);
+      if (cloud.history) history = cloud.history;
+      if (cloud.wrongCounts) wrongCounts = cloud.wrongCounts;
+      if (cloud.exams && cloud.exams.length) EXAMS = cloud.exams;
+      if (cloud.session) localStorage.setItem('agentforce_session', JSON.stringify(cloud.session));
+
+      // Save to localStorage
+      saveCompleted();
+      saveHistory();
+      saveWrong();
+      if (EXAMS.length) saveExams();
+    }
+
+    function mergeData(local, cloud) {
+      if (!cloud || !cloud.timestamp) return local;
+      if (!local || !local.timestamp) return cloud;
+
+      const merged = { timestamp: Date.now() };
+
+      // History: concat + dedupe by date
+      const allHistory = [...(local.history || []), ...(cloud.history || [])];
+      const seen = new Set();
+      merged.history = allHistory.filter(h => {
+        if (seen.has(h.date)) return false;
+        seen.add(h.date);
+        return true;
+      });
+
+      // Completed sets: union
+      merged.completedLearning = [...new Set([...(local.completedLearning || []), ...(cloud.completedLearning || [])])];
+      merged.completedExam = [...new Set([...(local.completedExam || []), ...(cloud.completedExam || [])])];
+
+      // Wrong counts: max value for each question
+      merged.wrongCounts = { ...(local.wrongCounts || {}) };
+      Object.entries(cloud.wrongCounts || {}).forEach(([q, count]) => {
+        merged.wrongCounts[q] = Math.max(merged.wrongCounts[q] || 0, count);
+      });
+
+      // Exams: keep cloud version if exists
+      merged.exams = (cloud.exams && cloud.exams.length) ? cloud.exams : (local.exams || []);
+
+      // Session: newer wins
+      const localSession = local.session;
+      const cloudSession = cloud.session;
+      if (localSession && cloudSession) {
+        merged.session = (localSession.examStartTime || 0) > (cloudSession.examStartTime || 0) ? localSession : cloudSession;
+      } else {
+        merged.session = localSession || cloudSession || null;
+      }
+
+      return merged;
+    }
+
+    async function createBlob() {
+      try {
+        setSyncStatus('🔄');
+        const data = getAllLocalData();
+        const res = await fetch(JSONBLOB_API, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(data)
+        });
+        if (!res.ok) throw new Error('Create failed');
+        const blobUrl = res.headers.get('X-Jsonblob') || res.headers.get('location') || '';
+        const id = blobUrl.split('/').pop() || blobUrl;
+        if (id) {
+          syncBlobId = id;
+          localStorage.setItem('agentforce_sync_id', id);
+          lastSyncTime = Date.now();
+          localStorage.setItem('agentforce_last_sync', lastSyncTime.toString());
+          $("currentSyncId").value = id;
+          setSyncStatus('✅');
+          updateLastSyncInfo();
+        }
+        return id;
+      } catch (e) {
+        console.error('Create blob error:', e);
+        setSyncStatus('❌');
+        return null;
+      }
+    }
+
+    async function fetchFromCloud() {
+      if (!syncBlobId) return null;
+      try {
+        setSyncStatus('🔄');
+        const res = await fetch(`${JSONBLOB_API}/${syncBlobId}`);
+        if (!res.ok) throw new Error('Fetch failed');
+        const data = await res.json();
+        setSyncStatus('✅');
+        return data;
+      } catch (e) {
+        console.error('Fetch cloud error:', e);
+        setSyncStatus('❌');
+        return null;
+      }
+    }
+
+    async function saveToCloud() {
+      if (!syncBlobId) {
+        await createBlob();
+        return;
+      }
+      try {
+        setSyncStatus('🔄');
+        const data = getAllLocalData();
+        const res = await fetch(`${JSONBLOB_API}/${syncBlobId}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(data)
+        });
+        if (!res.ok) throw new Error('Save failed');
+        lastSyncTime = Date.now();
+        localStorage.setItem('agentforce_last_sync', lastSyncTime.toString());
+        setSyncStatus('✅');
+        updateLastSyncInfo();
+      } catch (e) {
+        console.error('Save cloud error:', e);
+        setSyncStatus('❌');
+      }
+    }
+
+    function scheduleSyncSave() {
+      clearTimeout(syncDebounceTimer);
+      syncDebounceTimer = setTimeout(() => saveToCloud(), 2000);
+    }
+
+    async function syncWithCloud() {
+      if (!syncBlobId) {
+        await createBlob();
+        return;
+      }
+      const cloud = await fetchFromCloud();
+      if (cloud) {
+        const local = getAllLocalData();
+        const merged = mergeData(local, cloud);
+        applyCloudData(merged);
+        await saveToCloud();
+      }
+    }
+
+    function updateLastSyncInfo() {
+      const info = $("lastSyncInfo");
+      if (lastSyncTime) {
+        const d = new Date(lastSyncTime);
+        info.textContent = `Последна синхр.: ${d.toLocaleString('bg-BG')}`;
+      } else {
+        info.textContent = 'Последна синхр.: никога';
+      }
+    }
+
+    // Sync UI handlers
+    $("syncBtn").onclick = () => {
+      $("currentSyncId").value = syncBlobId || '';
+      updateLastSyncInfo();
+      $("syncModal").classList.add('show');
+    };
+
+    $("closeSyncModal").onclick = () => $("syncModal").classList.remove('show');
+    $("syncModal").onclick = e => { if (e.target === $("syncModal")) $("syncModal").classList.remove('show'); };
+
+    $("copySyncIdBtn").onclick = () => {
+      const id = $("currentSyncId").value;
+      if (id) {
+        navigator.clipboard.writeText(id).then(() => {
+          $("copySyncIdBtn").textContent = '✓';
+          setTimeout(() => $("copySyncIdBtn").textContent = '📋', 1500);
+        });
+      }
+    };
+
+    $("connectSyncBtn").onclick = async () => {
+      const newId = $("otherSyncId").value.trim();
+      if (!newId) return alert('Въведи Sync ID');
+      if (!confirm('⚠️ Това ще замени локалните данни. Продължи?')) return;
+
+      syncBlobId = newId;
+      localStorage.setItem('agentforce_sync_id', newId);
+      $("currentSyncId").value = newId;
+
+      const cloud = await fetchFromCloud();
+      if (cloud) {
+        applyCloudData(cloud);
+        alert('✅ Синхронизацията е успешна!');
+        $("syncModal").classList.remove('show');
+        location.reload();
+      } else {
+        alert('❌ Грешка при зареждане. Провери ID-то.');
+      }
+    };
+
+    $("forceSyncBtn").onclick = async () => {
+      await syncWithCloud();
+      updateLastSyncInfo();
+      alert('✅ Синхронизация завършена!');
+    };
+
+    // Hook into save functions to trigger cloud sync
+    const originalSaveCompleted = saveCompleted;
+    saveCompleted = function () {
+      originalSaveCompleted();
+      scheduleSyncSave();
+    };
+
+    const originalSaveHistory = saveHistory;
+    saveHistory = function () {
+      originalSaveHistory();
+      scheduleSyncSave();
+    };
+
+    const originalSaveWrong = saveWrong;
+    saveWrong = function () {
+      originalSaveWrong();
+      scheduleSyncSave();
+    };
+
+    const originalSaveExams = saveExams;
+    saveExams = function () {
+      originalSaveExams();
+      scheduleSyncSave();
+    };
+
+    const originalSaveExamSession = saveExamSession;
+    saveExamSession = function () {
+      originalSaveExamSession();
+      scheduleSyncSave();
+    };
+
+    // Initial sync on load
+    (async function initSync() {
+      if (syncBlobId) {
+        $("currentSyncId").value = syncBlobId;
+        await syncWithCloud();
+      } else {
+        await createBlob();
+      }
+      updateLastSyncInfo();
+    })();
+    // ==================== END CLOUD SYNC ====================
 
     // Stats Panel
     $("statsBtn").onclick = () => { renderStatsPanel(); $("statsPanel").classList.remove('hidden'); };
