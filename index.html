@@ -12,6 +12,9 @@
   <link rel="apple-touch-icon"
     href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='20' fill='%23007bff'/><text x='50' y='65' text-anchor='middle' font-size='50'>📝</text></svg>">
   <title>Agentforce Exam</title>
+  <!-- Firebase SDK -->
+  <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-database-compat.js"></script>
   <style>
     :root {
       --bg: #fff;
@@ -942,15 +945,32 @@
       showQuestion();
     }
 
-    // ==================== CLOUD SYNC ====================
-    const JSONBIN_API = 'https://api.jsonbin.io/v3/b';
+    // ==================== CLOUD SYNC (Firebase) ====================
+    const firebaseConfig = {
+      apiKey: "AIzaSyDG0A7yLL9pjMdP07uqEEHODiT2n17CTyQ",
+      authDomain: "agentforce-exam.firebaseapp.com",
+      databaseURL: "https://agentforce-exam-default-rtdb.europe-west1.firebasedatabase.app",
+      projectId: "agentforce-exam",
+      storageBucket: "agentforce-exam.firebasestorage.app",
+      messagingSenderId: "1022127011324",
+      appId: "1:1022127011324:web:786874340ad01947a32e79"
+    };
+
+    // Initialize Firebase
+    try {
+      if (!firebase.apps.length) {
+        firebase.initializeApp(firebaseConfig);
+      }
+    } catch (e) { console.error("Firebase init error", e); }
+
+    const db = firebase.database();
     let syncBlobId = localStorage.getItem('agentforce_sync_id');
     let syncDebounceTimer = null;
     let lastSyncTime = parseInt(localStorage.getItem('agentforce_last_sync') || '0');
 
     function setSyncStatus(status) {
       const el = $("syncStatus");
-      el.textContent = status;
+      if (el) el.textContent = status;
     }
 
     function getAllLocalData() {
@@ -1026,18 +1046,10 @@
       try {
         setSyncStatus('🔄');
         const data = getAllLocalData();
-        const res = await fetch(JSONBIN_API, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'X-Bin-Private': 'false'
-          },
-          body: JSON.stringify(data)
-        });
-        if (!res.ok) throw new Error('Create failed');
-        const result = await res.json();
-        // jsonbin.io returns ID in metadata.id
-        const id = result.metadata?.id;
+        const newRef = db.ref('exams').push();
+        const id = newRef.key;
+        await newRef.set(data);
+
         if (id) {
           syncBlobId = id;
           localStorage.setItem('agentforce_sync_id', id);
@@ -1059,12 +1071,11 @@
       if (!syncBlobId) return null;
       try {
         setSyncStatus('🔄');
-        const res = await fetch(`${JSONBIN_API}/${syncBlobId}/latest`);
-        if (!res.ok) throw new Error('Fetch failed');
-        const result = await res.json();
-        // jsonbin.io returns data in record field
+        const snapshot = await db.ref('exams/' + syncBlobId).once('value');
+        if (!snapshot.exists()) throw new Error('Not found');
+        const data = snapshot.val();
         setSyncStatus('✅');
-        return result.record;
+        return data;
       } catch (e) {
         console.error('Fetch cloud error:', e);
         setSyncStatus('❌');
@@ -1080,12 +1091,7 @@
       try {
         setSyncStatus('🔄');
         const data = getAllLocalData();
-        const res = await fetch(`${JSONBIN_API}/${syncBlobId}`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(data)
-        });
-        if (!res.ok) throw new Error('Save failed');
+        await db.ref('exams/' + syncBlobId).set(data);
         lastSyncTime = Date.now();
         localStorage.setItem('agentforce_last_sync', lastSyncTime.toString());
         setSyncStatus('✅');
